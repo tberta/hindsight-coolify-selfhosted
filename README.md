@@ -7,9 +7,13 @@ as a single Coolify resource, with its own bundled PostgreSQL.
 
 | Service | Image | Port | Role |
 |---|---|---|---|
-| `postgres` | `pgvector/pgvector:pg17` | 5432 (internal) | Database with the `vector` + `pg_trgm` extensions |
-| `hindsight-api` | `ghcr.io/vectorize-io/hindsight-api:latest` | 8888 | API + MCP server + worker; runs DB migrations on startup |
-| `hindsight-control-plane` | `ghcr.io/vectorize-io/hindsight-control-plane:latest` | 9999 | Web UI |
+| `postgres` | `pgvector/pgvector:0.8.0-pg17` | 5432 (internal) | Database with the `vector` + `pg_trgm` extensions |
+| `hindsight-api` | `ghcr.io/vectorize-io/hindsight-api:0.7.1` | 8888 | API + MCP server + worker; runs DB migrations on startup |
+| `hindsight-control-plane` | `ghcr.io/vectorize-io/hindsight-control-plane:0.7.1` | 9999 | Web UI |
+
+Image tags are pinned. The two Hindsight images share **`HINDSIGHT_VERSION`**
+(default `0.7.1`) — bump it in your env to upgrade; see
+[releases](https://github.com/vectorize-io/hindsight/releases).
 
 Embeddings and reranking run **locally inside the API container** (no extra API
 keys), so the API container wants roughly **2–4 GB RAM**. The first start

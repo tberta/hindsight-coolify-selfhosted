@@ -15,7 +15,8 @@
 
 services:
   postgres:
-    image: pgvector/pgvector:pg17
+    # Pinned: pgvector 0.8.0 on PostgreSQL 17.
+    image: pgvector/pgvector:0.8.0-pg17
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-hindsight}
@@ -32,7 +33,7 @@ services:
       retries: 20
 
   hindsight-api:
-    image: ghcr.io/vectorize-io/hindsight-api:latest
+    image: ghcr.io/vectorize-io/hindsight-api:${HINDSIGHT_VERSION:-0.7.1}
     restart: unless-stopped
     depends_on:
       postgres:
@@ -85,7 +86,7 @@ services:
       start_period: 300s
 
   hindsight-control-plane:
-    image: ghcr.io/vectorize-io/hindsight-control-plane:latest
+    image: ghcr.io/vectorize-io/hindsight-control-plane:${HINDSIGHT_VERSION:-0.7.1}
     restart: unless-stopped
     depends_on:
       hindsight-api:

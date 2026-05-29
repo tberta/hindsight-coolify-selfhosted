@@ -1,0 +1,24 @@
+# This stack only pulls prebuilt images (no build context), so this file is
+# mostly hygiene — it keeps secrets and local cruft out of any build context
+# Coolify might create.
+
+# Secrets / local env
+.env
+.env.*
+!.env.example
+*.local
+
+# VCS / project metadata
+.git
+.gitignore
+.github
+
+# Docs (not needed at runtime/build)
+README.md
+*.md
+
+# Editor / OS cruft
+.idea
+.vscode
+*.swp
+.DS_Store
