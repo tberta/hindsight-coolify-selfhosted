@@ -1,0 +1,98 @@
+# Hindsight self-hosted stack for Coolify
+# ----------------------------------------
+# Three services in one Coolify resource:
+#   - postgres            : PostgreSQL 17 + pgvector (the "included" database)
+#   - hindsight-api       : data plane / API + MCP server + worker (port 8888)
+#   - hindsight-control-plane : web UI (port 9999)
+#
+# Coolify wiring:
+#   SERVICE_FQDN_<NAME>_<PORT> are Coolify "magic" variables. Coolify generates a
+#   public FQDN for each and configures its reverse proxy (Traefik/Caddy) to route
+#   that domain to the given container port. You can override the generated domains
+#   in the Coolify UI (Service -> Domains) after the first deploy.
+#
+# Everything secret/tunable comes from environment variables (see .env.example).
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hindsight}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-hindsight}
+    volumes:
+      - hindsight-pgdata:/var/lib/postgresql/data
+      # Enables the required extensions on first DB creation (idempotent).
+      - ./init-db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hindsight} -d ${POSTGRES_DB:-hindsight}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  hindsight-api:
+    image: ghcr.io/vectorize-io/hindsight-api:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # --- Coolify: expose the API on a generated domain, proxied to port 8888 ---
+      - SERVICE_FQDN_HINDSIGHTAPI_8888
+
+      # --- Database (the bundled postgres service) ---
+      - HINDSIGHT_API_DATABASE_URL=postgresql://${POSTGRES_USER:-hindsight}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-hindsight}
+      - HINDSIGHT_API_VECTOR_EXTENSION=${HINDSIGHT_API_VECTOR_EXTENSION:-pgvector}
+      - HINDSIGHT_API_RUN_MIGRATIONS_ON_STARTUP=true
+
+      # --- LLM provider ---
+      # Allowed providers: openai, openai-codex, claude-code, anthropic, gemini,
+      # groq, minimax, deepseek, zai, opencode-go, ollama, ollama-cloud, lmstudio,
+      # llamacpp, vertexai, bedrock, litellm, litellmrouter, volcano, openrouter, none
+      - HINDSIGHT_API_LLM_PROVIDER=${HINDSIGHT_API_LLM_PROVIDER:-anthropic}
+      - HINDSIGHT_API_LLM_MODEL=${HINDSIGHT_API_LLM_MODEL:-claude-sonnet-4-5-20250929}
+      - HINDSIGHT_API_LLM_API_KEY=${HINDSIGHT_API_LLM_API_KEY}
+
+      # --- Embeddings + reranker run locally inside this container (no extra keys).
+      #     First start downloads the models (~hundreds of MB) into the cache volume. ---
+      - HINDSIGHT_API_EMBEDDINGS_PROVIDER=${HINDSIGHT_API_EMBEDDINGS_PROVIDER:-local}
+      - HINDSIGHT_API_RERANKER_PROVIDER=${HINDSIGHT_API_RERANKER_PROVIDER:-local}
+
+      # --- Worker identity: keep stable across restarts ---
+      - HINDSIGHT_API_WORKER_ID=${HINDSIGHT_API_WORKER_ID:-hindsight-worker-1}
+
+      # --- Optional: require an API key on the data-plane API (recommended, since
+      #     the API is publicly exposed). Set both to enable. ---
+      - HINDSIGHT_API_TENANT_EXTENSION=${HINDSIGHT_API_TENANT_EXTENSION:-}
+      - HINDSIGHT_API_TENANT_API_KEY=${HINDSIGHT_API_TENANT_API_KEY:-}
+
+      - HINDSIGHT_API_LOG_FORMAT=${HINDSIGHT_API_LOG_FORMAT:-json}
+    expose:
+      - "8888"
+    volumes:
+      # Persist downloaded embedding/reranker models so restarts don't re-download.
+      - hindsight-models:/home/hindsight/.cache
+
+  hindsight-control-plane:
+    image: ghcr.io/vectorize-io/hindsight-control-plane:latest
+    restart: unless-stopped
+    depends_on:
+      - hindsight-api
+    environment:
+      # --- Coolify: expose the UI on a generated domain, proxied to port 9999 ---
+      - SERVICE_FQDN_HINDSIGHTUI_9999
+
+      # The UI's server talks to the API over the internal compose network by default.
+      # If your browser must call the API directly, set this to the API's public URL
+      # (e.g. https://your-api-domain) in .env / the Coolify UI instead.
+      - HINDSIGHT_CP_DATAPLANE_API_URL=${HINDSIGHT_CP_DATAPLANE_API_URL:-http://hindsight-api:8888}
+
+      # Password-protects the UI (login key).
+      - HINDSIGHT_CP_ACCESS_KEY=${HINDSIGHT_CP_ACCESS_KEY}
+    expose:
+      - "9999"
+
+volumes:
+  hindsight-pgdata:
+  hindsight-models:
