@@ -62,10 +62,11 @@ services:
       # --- Worker identity: keep stable across restarts ---
       - HINDSIGHT_API_WORKER_ID=${HINDSIGHT_API_WORKER_ID:-hindsight-worker-1}
 
-      # --- Optional: require an API key on the data-plane API (recommended, since
-      #     the API is publicly exposed). Set both to enable. ---
-      - HINDSIGHT_API_TENANT_EXTENSION=${HINDSIGHT_API_TENANT_EXTENSION:-}
-      - HINDSIGHT_API_TENANT_API_KEY=${HINDSIGHT_API_TENANT_API_KEY:-}
+      # --- API key gate on the public data-plane API (enabled by default).
+      #     Requests to the API/MCP must present HINDSIGHT_API_TENANT_API_KEY.
+      #     To disable, set HINDSIGHT_API_TENANT_EXTENSION to an empty value. ---
+      - HINDSIGHT_API_TENANT_EXTENSION=${HINDSIGHT_API_TENANT_EXTENSION:-hindsight_api.extensions.builtin.tenant:ApiKeyTenantExtension}
+      - HINDSIGHT_API_TENANT_API_KEY=${HINDSIGHT_API_TENANT_API_KEY:?set HINDSIGHT_API_TENANT_API_KEY (the data-plane API key gate is enabled by default)}
 
       - HINDSIGHT_API_LOG_FORMAT=${HINDSIGHT_API_LOG_FORMAT:-json}
     expose:
@@ -90,6 +91,10 @@ services:
 
       # Password-protects the UI (login key).
       - HINDSIGHT_CP_ACCESS_KEY=${HINDSIGHT_CP_ACCESS_KEY}
+
+      # The data-plane API key gate is enabled by default, so the UI must
+      # authenticate to the API with the same key (sent as a Bearer token).
+      - HINDSIGHT_CP_DATAPLANE_API_KEY=${HINDSIGHT_API_TENANT_API_KEY:?set HINDSIGHT_API_TENANT_API_KEY (shared with the data-plane API key gate)}
     expose:
       - "9999"
 

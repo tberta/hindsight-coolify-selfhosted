@@ -36,7 +36,8 @@ list in `.env.example`.
    `.env.example` as the reference. At minimum:
    - `POSTGRES_PASSWORD`
    - `HINDSIGHT_API_LLM_API_KEY`
-   - `HINDSIGHT_CP_ACCESS_KEY`
+   - `HINDSIGHT_CP_ACCESS_KEY` (UI login)
+   - `HINDSIGHT_API_TENANT_API_KEY` (data-plane API key, see below)
 4. **Deploy.** Coolify auto-generates domains for the two `SERVICE_FQDN_*`
    variables and wires up its reverse proxy + TLS:
    - `SERVICE_FQDN_HINDSIGHTUI_9999` → the web UI
@@ -50,16 +51,21 @@ list in `.env.example`.
 ```bash
 openssl rand -hex 24   # POSTGRES_PASSWORD
 openssl rand -hex 24   # HINDSIGHT_CP_ACCESS_KEY
+openssl rand -hex 24   # HINDSIGHT_API_TENANT_API_KEY
 ```
 
-## Securing the public API
+## Data-plane API key gate (on by default)
 
-The API/MCP endpoint is internet-facing. To require an API key on it, set both:
+The API/MCP endpoint is internet-facing, so this stack enables an API key gate
+by default: every request to the API must send `Authorization: Bearer
+<HINDSIGHT_API_TENANT_API_KEY>`. The control plane reuses the same key
+(`HINDSIGHT_CP_DATAPLANE_API_KEY`), so you only set **`HINDSIGHT_API_TENANT_API_KEY`**
+once and external clients (e.g. an MCP integration) use that same value.
 
-```
-HINDSIGHT_API_TENANT_EXTENSION=hindsight_api.extensions.builtin.tenant:ApiKeyTenantExtension
-HINDSIGHT_API_TENANT_API_KEY=<long-random-string>
-```
+Both the API and the control plane fail fast on startup if it isn't set.
+
+To **disable** the gate, set `HINDSIGHT_API_TENANT_EXTENSION` to an empty value
+(you'll then also want to clear `HINDSIGHT_CP_DATAPLANE_API_KEY`).
 
 ## Local test (optional, requires Docker)
 
