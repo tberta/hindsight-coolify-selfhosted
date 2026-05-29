@@ -74,12 +74,22 @@ services:
     volumes:
       # Persist downloaded embedding/reranker models so restarts don't re-download.
       - hindsight-models:/home/hindsight/.cache
+    healthcheck:
+      # /health checks the API + database connection (unauthenticated).
+      # start_period is generous: first boot runs migrations and downloads the
+      # local embedding/reranker models before the API is ready.
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8888/health || wget -qO- http://localhost:8888/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 300s
 
   hindsight-control-plane:
     image: ghcr.io/vectorize-io/hindsight-control-plane:latest
     restart: unless-stopped
     depends_on:
-      - hindsight-api
+      hindsight-api:
+        condition: service_healthy
     environment:
       # --- Coolify: expose the UI on a generated domain, proxied to port 9999 ---
       - SERVICE_FQDN_HINDSIGHTUI_9999
